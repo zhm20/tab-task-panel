@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New Tab</title>
+    <link rel="icon" href="assets/icon32.png" sizes="32x32" />
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="header-copy">
+          <h1>Open tabs</h1>
+          <p id="dateLabel"></p>
+        </div>
+        <div class="toolbar">
+          <label class="theme-toggle">
+            <span>主题</span>
+            <select id="themeSelect" aria-label="主题">
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </label>
+          <button id="closeAllButton" type="button">关闭全部</button>
+          <button id="closeSelectedButton" type="button" disabled>关闭所选</button>
+          <button id="refreshButton" class="icon-button" type="button" title="刷新">
+            <span aria-hidden="true">↻</span>
+          </button>
+        </div>
+      </header>
+
+      <section id="panelDupeBanner" class="system-banner" hidden>
+        <div>
+          <strong>检测到多个 Tab Task Panel 标签页</strong>
+          <span id="panelDupeText"></span>
+        </div>
+        <button id="closePanelDupesButton" type="button">关闭额外面板</button>
+      </section>
+
+      <section id="stats" class="stats" aria-label="标签统计"></section>
+
+      <section class="content-grid">
+        <section>
+          <div class="section-title">
+            <h2>当前标签</h2>
+            <span id="domainCount" class="muted"></span>
+          </div>
+          <div id="domainGroups" class="domain-grid"></div>
+        </section>
+
+        <aside class="saved-panel">
+          <div class="section-title">
+            <h2>Saved for later</h2>
+            <span id="savedCount" class="muted"></span>
+          </div>
+          <div id="savedItems" class="saved-list"></div>
+          <section id="archivePanel" class="archive-panel" hidden>
+            <button id="archiveToggle" class="archive-toggle" type="button">
+              Archive <span id="archiveCount"></span>
+            </button>
+            <div id="archiveBody" class="archive-body" hidden>
+              <input id="archiveSearch" class="archive-search" type="search" placeholder="Search archived tabs..." />
+              <div id="archiveItems" class="archive-list"></div>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <template id="groupTemplate">
+      <article class="domain-card">
+        <div class="domain-head">
+          <div>
+            <h3></h3>
+            <p class="domain-meta"></p>
+          </div>
+          <div class="badges"></div>
+        </div>
+        <div class="tab-list"></div>
+        <button class="expand-button" type="button" data-action="expand-group" hidden></button>
+        <div class="group-actions">
+          <button type="button" data-action="close-group">关闭本组</button>
+          <button type="button" data-action="close-duplicates">关闭重复</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="tabTemplate">
+      <article class="tab-row">
+        <label class="select-tab">
+          <input type="checkbox" />
+        </label>
+        <img class="favicon" alt="" />
+        <div class="tab-body">
+          <div class="tab-title-line">
+            <a class="tab-title" href="#"></a>
+            <span class="dupe-chip" hidden></span>
+          </div>
+          <p class="tab-overview"></p>
+          <div class="tab-flags"></div>
+        </div>
+        <button class="icon-action save-action" type="button" data-action="save-tab" title="保存后关闭" aria-label="保存后关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.75 4.75a2 2 0 0 1 2-2h6.5a2 2 0 0 1 2 2v16.5L12 18.2l-5.25 3.05V4.75Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button class="icon-action close-action" type="button" data-action="close-tab" title="关闭标签">×</button>
+      </article>
+    </template>
+
+    <template id="savedTemplate">
+      <article class="saved-row">
+        <input class="saved-checkbox" type="checkbox" data-action="check-saved" />
+        <img class="favicon" alt="" />
+        <div>
+          <a class="saved-title" target="_blank" rel="noreferrer"></a>
+          <p class="saved-meta"></p>
+        </div>
+        <button class="icon-action" type="button" data-action="dismiss-saved" title="移除">×</button>
+      </article>
+    </template>
+
+    <template id="archiveTemplate">
+      <article class="archive-row">
+        <a class="archive-title" target="_blank" rel="noreferrer"></a>
+        <span class="archive-date"></span>
+      </article>
+    </template>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="config.local.js" onerror="/* optional local config */"></script>
+    <script type="module" src="src/newtab.js"></script>
+  </body>
+</html>

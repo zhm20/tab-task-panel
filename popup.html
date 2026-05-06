@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tab Task Panel</title>
+    <link rel="stylesheet" href="src/popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <h1>标签状态</h1>
+        <div class="popup-actions">
+          <select id="themeSelect" aria-label="主题">
+            <option value="system">系统</option>
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select>
+          <button id="refreshButton" type="button" title="刷新">↻</button>
+        </div>
+      </header>
+      <section id="metrics" class="metrics" aria-label="任务统计"></section>
+      <section class="preview">
+        <h2>域名分组</h2>
+        <div id="activePreview" class="preview-list"></div>
+      </section>
+      <a class="open-newtab" href="newtab.html" target="_blank">打开任务面板</a>
+    </main>
+    <script src="config.local.js" onerror="/* optional local config */"></script>
+    <script type="module" src="src/popup.js"></script>
+  </body>
+</html>

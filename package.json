@@ -1,0 +1,9 @@
+{
+  "name": "tab-task-panel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/taskEngine.js && node --check src/theme.js && node --check src/newtab.js && node --check src/popup.js && node --check src/background.js"
+  }
+}
