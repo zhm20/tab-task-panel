@@ -4,11 +4,48 @@
 
 ## 安装
 
-1. 打开 Chrome：`chrome://extensions/`
-2. 开启右上角「开发者模式」
-3. 点击「加载已解压的扩展程序」
-4. 选择本项目目录
-5. 打开新标签页查看面板
+这个项目是未打包的 Chrome Manifest V3 扩展，不需要 Node.js、npm、后端服务或构建步骤。
+
+### 从 GitHub 下载
+
+1. 打开仓库页面：[zhm20/tab-task-panel](https://github.com/zhm20/tab-task-panel)
+2. 点击绿色 `Code` 按钮，选择 `Download ZIP`
+3. 解压下载的 ZIP，得到 `tab-task-panel-main` 文件夹
+4. 打开 Chrome：`chrome://extensions/`
+5. 开启右上角「开发者模式」
+6. 点击「加载已解压的扩展程序」
+7. 选择刚才解压出的 `tab-task-panel-main` 文件夹
+8. 打开一个新标签页，Chrome 会显示 Tab Task Panel
+
+### 用 git clone 安装
+
+```bash
+git clone git@github.com:zhm20/tab-task-panel.git
+```
+
+然后在 `chrome://extensions/` 里选择 clone 下来的 `tab-task-panel` 目录。
+
+如果没有配置 GitHub SSH，也可以使用 HTTPS：
+
+```bash
+git clone https://github.com/zhm20/tab-task-panel.git
+```
+
+### 更新
+
+- 如果是 ZIP 安装：重新下载 ZIP，解压覆盖原目录，然后在 `chrome://extensions/` 点击扩展卡片上的刷新按钮。
+- 如果是 git 安装：在项目目录执行 `git pull`，然后在 `chrome://extensions/` 点击扩展卡片上的刷新按钮。
+
+### 权限说明
+
+安装时 Chrome 会提示扩展需要访问历史记录、标签页和网页内容。这些权限用于：
+
+- `tabs`：读取当前打开的标签，并执行切换/关闭操作。
+- `history`：只做本地熟悉度统计，不展示已关闭历史页面。
+- `scripting`：读取当前打开页面的标题、描述、正文片段，用于生成页面概览。
+- `storage`：保存主题、选择状态、Saved for later 和 Archive。
+
+所有分析都在本机浏览器内完成，不调用外部 API。
 
 ## 能力
 
