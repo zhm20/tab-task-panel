@@ -1,73 +1,75 @@
 # Tab Task Panel
 
-本地 Chrome Manifest V3 扩展：整理当前打开的标签页，按域名/自定义规则聚类，显示 favicon、标题、页面概览、重复标记，并提供关闭单个、关闭整组、关闭重复、勾选批量关闭、保存稍后再看和 Archive。
+English | [简体中文](README.zh-CN.md)
 
-## 安装
+A local Chrome Manifest V3 extension for organizing currently open tabs. It groups tabs by domain or custom local rules, shows favicons, cleaned titles, page summaries, duplicate markers, and provides controls to close a single tab, close a whole group, close duplicates, bulk-close selected tabs, save tabs for later, and archive completed saved items.
 
-这个项目是未打包的 Chrome Manifest V3 扩展，不需要 Node.js、npm、后端服务或构建步骤。
+## Installation
 
-### 从 GitHub 下载
+This is an unpacked Chrome Manifest V3 extension. It does not require Node.js, npm, a backend service, or a build step.
 
-1. 打开仓库页面：[zhm20/tab-task-panel](https://github.com/zhm20/tab-task-panel)
-2. 点击绿色 `Code` 按钮，选择 `Download ZIP`
-3. 解压下载的 ZIP，得到 `tab-task-panel-main` 文件夹
-4. 打开 Chrome：`chrome://extensions/`
-5. 开启右上角「开发者模式」
-6. 点击「加载已解压的扩展程序」
-7. 选择刚才解压出的 `tab-task-panel-main` 文件夹
-8. 打开一个新标签页，Chrome 会显示 Tab Task Panel
+### Download from GitHub
 
-### 用 git clone 安装
+1. Open the repository: [zhm20/tab-task-panel](https://github.com/zhm20/tab-task-panel)
+2. Click the green `Code` button and choose `Download ZIP`
+3. Unzip the downloaded file. You should get a `tab-task-panel-main` folder
+4. Open Chrome and go to `chrome://extensions/`
+5. Enable `Developer mode` in the top-right corner
+6. Click `Load unpacked`
+7. Select the extracted `tab-task-panel-main` folder
+8. Open a new tab. Chrome should show Tab Task Panel
+
+### Install with git clone
 
 ```bash
 git clone git@github.com:zhm20/tab-task-panel.git
 ```
 
-然后在 `chrome://extensions/` 里选择 clone 下来的 `tab-task-panel` 目录。
+Then open `chrome://extensions/` and select the cloned `tab-task-panel` directory with `Load unpacked`.
 
-如果没有配置 GitHub SSH，也可以使用 HTTPS：
+If you do not have GitHub SSH configured, use HTTPS instead:
 
 ```bash
 git clone https://github.com/zhm20/tab-task-panel.git
 ```
 
-### 更新
+### Update
 
-- 如果是 ZIP 安装：重新下载 ZIP，解压覆盖原目录，然后在 `chrome://extensions/` 点击扩展卡片上的刷新按钮。
-- 如果是 git 安装：在项目目录执行 `git pull`，然后在 `chrome://extensions/` 点击扩展卡片上的刷新按钮。
+- ZIP install: download the latest ZIP again, replace the old folder, then click the reload button on the extension card in `chrome://extensions/`.
+- git install: run `git pull` in the project directory, then click the reload button on the extension card in `chrome://extensions/`.
 
-### 权限说明
+### Permissions
 
-安装时 Chrome 会提示扩展需要访问历史记录、标签页和网页内容。这些权限用于：
+Chrome will ask for access to history, tabs, and page content. The extension uses those permissions for:
 
-- `tabs`：读取当前打开的标签，并执行切换/关闭操作。
-- `history`：只做本地熟悉度统计，不展示已关闭历史页面。
-- `scripting`：读取当前打开页面的标题、描述、正文片段，用于生成页面概览。
-- `storage`：保存主题、选择状态、Saved for later 和 Archive。
+- `tabs`: read currently open tabs, switch to existing tabs, and close tabs after user action.
+- `history`: compute local familiarity statistics only. Closed history pages are not shown in the main list.
+- `scripting`: read titles, descriptions, and page text snippets from currently open pages to build summaries.
+- `storage`: save theme preference, selected tabs, Saved for later, and Archive state.
 
-所有分析都在本机浏览器内完成，不调用外部 API。
+All analysis runs locally in your browser. The extension does not call external APIs.
 
-## 能力
+## Features
 
-- 只展示当前打开的真实网页标签，不展示已关闭历史页面。
-- `Homepages` 特殊分组：Gmail inbox、X home、LinkedIn root、GitHub root、ChatGPT root、YouTube root。
-- 重复检测：exact URL、去 query/hash 后同路径、同域同标题。
-- 每组默认展示前 8 个唯一页面，超出用 `+N more` 展开。
-- 点击标题切换到现有标签和窗口，不新开页面。
-- 保存单个标签到稍后再看后会关闭该标签。
-- Saved for later 支持 checklist、Archive、Archive 搜索、dismiss。
-- 主题支持跟随系统、手动浅色、手动深色，设置保存在 `chrome.storage.local`。
-- toolbar badge 显示真实网页 tab 数，并按负载变色。
-- 支持 Chrome Manifest V3 的桌面 Chrome，包括 macOS、Windows、Linux。
+- Shows only currently open real web tabs. Closed history pages are not listed.
+- `Homepages` special group: Gmail inbox, X home, LinkedIn root, GitHub root, ChatGPT root, and YouTube root.
+- Duplicate detection: exact URL, same path after removing query/hash, and same title under the same domain.
+- Shows the first 8 unique pages per group by default, with `+N more` expansion.
+- Clicking a tab title switches to the existing tab and window instead of opening a new page.
+- Saving a tab for later stores it locally and closes that tab.
+- Saved for later supports checklist completion, Archive, Archive search, and dismiss.
+- Theme supports system mode, manual light mode, and manual dark mode, stored in `chrome.storage.local`.
+- Toolbar badge shows the real web tab count and changes color by load.
+- Supports desktop Chrome with Manifest V3 on macOS, Windows, and Linux.
 
-## 隐私边界
+## Privacy
 
-- 不调用外部 API。
-- 不上传历史记录或标签页内容。
-- `history` 只用于本地熟悉度统计，不参与生成主列表。
-- UI 默认不展示 query、hash、token、验证码等敏感 URL 片段。
-- 关闭动作只由用户点击触发。
+- No external API calls.
+- No upload of history records or tab content.
+- `history` is used only for local familiarity statistics and does not feed the main list.
+- Query strings, hashes, tokens, verification codes, and other sensitive URL fragments are hidden from the UI by default.
+- Close actions only run after user clicks.
 
-## 本地配置
+## Local Configuration
 
-复制 `config.example.js` 为 `config.local.js` 后，可配置个人 landing page 或自定义分组规则。`config.local.js` 已加入 `.gitignore`，扩展无需 Node.js、npm、服务器或构建步骤即可运行。
+Copy `config.example.js` to `config.local.js` if you want personal landing page rules or custom grouping rules. `config.local.js` is ignored by git. The extension runs directly without Node.js, npm, a server, or a build step.
