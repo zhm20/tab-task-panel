@@ -3,7 +3,7 @@
   "name": "New Tab",
   "description": "Group currently open Chrome tabs by domain with local summaries and close controls.",
   "version": "0.1.0",
-  "permissions": ["history", "tabs", "storage", "scripting"],
+  "permissions": ["history", "tabs", "storage", "scripting", "sessions"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "chrome_url_overrides": {
     "newtab": "newtab.html"

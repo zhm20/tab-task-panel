@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A local Chrome Manifest V3 extension for organizing currently open tabs. It groups tabs by domain or custom local rules, shows favicons, cleaned titles, page summaries, duplicate markers, and provides controls to close a single tab, close a whole group, close duplicates, bulk-close selected tabs, save tabs for later, and archive completed saved items.
+A local Chrome Manifest V3 extension for organizing currently open tabs. It groups tabs by domain or custom local rules, shows favicons, cleaned titles, page summaries, duplicate markers, and provides controls to close a single tab, close a whole group, close duplicates, bulk-close selected tabs, save tabs for later, archive completed saved items, and review recently closed tabs.
 
 ## Installation
 
@@ -40,12 +40,13 @@ git clone https://github.com/zhm20/tab-task-panel.git
 
 ### Permissions
 
-Chrome will ask for access to history, tabs, and page content. The extension uses those permissions for:
+Chrome will ask for access to history, tabs, recently closed sessions, and page content. The extension uses those permissions for:
 
 - `tabs`: read currently open tabs, switch to existing tabs, and close tabs after user action.
 - `history`: compute local familiarity statistics only. Closed history pages are not shown in the main list.
+- `sessions`: read Chrome's recently closed tabs/windows and restore them after user action.
 - `scripting`: read titles, descriptions, and page text snippets from currently open pages to build summaries.
-- `storage`: save theme preference, selected tabs, Saved for later, and Archive state.
+- `storage`: save theme preference, selected tabs, Saved for later, Archive state, and local panel-close history.
 
 All analysis runs locally in your browser. The extension does not call external APIs.
 
@@ -58,6 +59,8 @@ All analysis runs locally in your browser. The extension does not call external 
 - Clicking a tab title switches to the existing tab and window instead of opening a new page.
 - Saving a tab for later stores it locally and closes that tab.
 - Saved for later supports checklist completion, Archive, Archive search, and dismiss.
+- Recently closed combines Chrome's recent session list with tabs closed from this panel.
+- Recently closed can restore Chrome session items in place, or reopen panel-logged items with their safe URL.
 - Theme supports system mode, manual light mode, and manual dark mode, stored in `chrome.storage.local`.
 - Toolbar badge shows the real web tab count and changes color by load.
 - Supports desktop Chrome with Manifest V3 on macOS, Windows, and Linux.
@@ -67,6 +70,8 @@ All analysis runs locally in your browser. The extension does not call external 
 - No external API calls.
 - No upload of history records or tab content.
 - `history` is used only for local familiarity statistics and does not feed the main list.
+- `sessions` is used only to show and restore Chrome's recently closed tabs/windows. Chrome limits how many session entries are available.
+- Panel-close history keeps only safe local fields for up to 30 days or 200 items.
 - Query strings, hashes, tokens, verification codes, and other sensitive URL fragments are hidden from the UI by default.
 - Close actions only run after user clicks.
 

@@ -4,6 +4,9 @@ const MAX_HISTORY_RESULTS = 6000;
 const STORAGE_KEY = "tabTaskPanelState";
 const OVERVIEW_TIMEOUT_MS = 900;
 const MAX_VISIBLE_TABS_PER_GROUP = 8;
+const RECENTLY_CLOSED_MAX = 25;
+const CLOSED_LOG_DAYS = 30;
+const MAX_CLOSED_LOG_ITEMS = 200;
 const THEME_MODES = new Set(["system", "light", "dark"]);
 
 const FRIENDLY_HOSTS = {
@@ -71,7 +74,10 @@ export async function buildDashboard({ includeOverviews = true } = {}) {
   const { realTabs, panelTabs } = normalizeTabs(rawTabs, extensionInfo);
   const panelDuplicateTabIds = duplicatePanelTabIds(panelTabs);
   const historyStats = buildHistoryStats(historyItems);
-  const overviewByTabId = includeOverviews ? await readPageOverviews(realTabs) : new Map();
+  const [overviewByTabId, closedItems] = await Promise.all([
+    includeOverviews ? readPageOverviews(realTabs) : new Map(),
+    readClosedHistory(state)
+  ]);
   const groups = groupTabs(realTabs, historyStats, overviewByTabId, state);
   const saved = splitSavedItems(state);
   const duplicateCount = groups.reduce((sum, group) => sum + group.duplicateCount, 0);
@@ -85,6 +91,7 @@ export async function buildDashboard({ includeOverviews = true } = {}) {
     selectedCount,
     savedCount: saved.active.length,
     archivedCount: saved.archived.length,
+    closedCount: closedItems.length,
     historyItemCount: historyItems.length,
     panelTabCount: panelTabs.length,
     panelDuplicateCount: panelDuplicateTabIds.length,
@@ -92,7 +99,7 @@ export async function buildDashboard({ includeOverviews = true } = {}) {
     badgeColor: badgeColor(realTabs.length)
   };
 
-  return { groups, savedItems: saved.active, archivedItems: saved.archived, summary, state };
+  return { groups, savedItems: saved.active, archivedItems: saved.archived, closedItems, summary, state };
 }
 
 export async function buildBadgeSummary() {
@@ -183,12 +190,39 @@ export async function dismissSavedItem(id) {
   return state;
 }
 
-export async function closeTabs(tabIds) {
+export async function closeTabs(tabIds, options = {}) {
   const ids = tabIds.map(Number).filter((id) => Number.isFinite(id));
   if (!ids.length) return;
-  await chrome.tabs.remove(ids);
   const state = await readState();
+  if (!options.skipClosedLog && Array.isArray(options.tabs) && options.tabs.length) {
+    appendClosedLog(state, options.tabs, options.reason || "closed");
+    await writeState(state);
+  }
+  await chrome.tabs.remove(ids);
   for (const id of ids) delete state.selected[String(id)];
+  await writeState(state);
+}
+
+export async function restoreClosedItem(id) {
+  if (!id) return null;
+  if (id.startsWith("session:")) {
+    const sessionId = id.slice("session:".length);
+    if (!sessionId) return null;
+    return chrome.sessions?.restore ? chrome.sessions.restore(sessionId) : null;
+  }
+
+  const state = await readState();
+  const item = state.closedLog.find((entry) => entry.id === id);
+  if (!item?.safeUrl || !chrome.tabs?.create) return null;
+  return chrome.tabs.create({ url: item.safeUrl });
+}
+
+export async function dismissClosedItem(id) {
+  if (!id) return;
+  const state = await readState();
+  state.closedDismissed[id] = new Date().toISOString();
+  state.closedLog = state.closedLog.filter((entry) => entry.id !== id);
+  pruneClosedState(state);
   await writeState(state);
 }
 
@@ -231,12 +265,16 @@ function normalizeState(raw) {
   const state = {
     selected: {},
     deferred: [],
+    closedLog: [],
+    closedDismissed: {},
     theme: "system"
   };
 
   if (!raw || typeof raw !== "object") return state;
   if (raw.selected && typeof raw.selected === "object") state.selected = raw.selected;
   if (THEME_MODES.has(raw.theme)) state.theme = raw.theme;
+  if (Array.isArray(raw.closedLog)) state.closedLog = raw.closedLog.map(normalizeClosedLogItem).filter(Boolean);
+  if (raw.closedDismissed && typeof raw.closedDismissed === "object") state.closedDismissed = raw.closedDismissed;
 
   if (Array.isArray(raw.deferred)) {
     state.deferred = raw.deferred;
@@ -256,6 +294,7 @@ function normalizeState(raw) {
     }));
   }
 
+  pruneClosedState(state);
   return state;
 }
 
@@ -265,6 +304,163 @@ function splitSavedItems(state) {
     active: visible.filter((item) => !item.completed).sort(sortSavedDesc),
     archived: visible.filter((item) => item.completed).sort(sortCompletedDesc)
   };
+}
+
+async function readClosedHistory(state) {
+  const [sessionItems, localItems] = await Promise.all([
+    readRecentlyClosedSessions(),
+    Promise.resolve(normalizedClosedLog(state))
+  ]);
+  const sessionSignatures = new Set(sessionItems.map((item) => item.signature).filter(Boolean));
+  const merged = [
+    ...sessionItems,
+    ...localItems.filter((item) => !sessionSignatures.has(item.signature) && !state.closedDismissed[item.id])
+  ];
+  return merged
+    .filter((item) => !state.closedDismissed[item.id])
+    .sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime());
+}
+
+async function readRecentlyClosedSessions() {
+  if (!chrome.sessions?.getRecentlyClosed) return [];
+  try {
+    const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: RECENTLY_CLOSED_MAX });
+    return sessions.map((session, index) => normalizeClosedSession(session, index)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeClosedSession(session, index) {
+  const closedAt = new Date((session.lastModified || Date.now() / 1000) * 1000).toISOString();
+  if (session.tab) {
+    const item = normalizeClosedSessionTab(session.tab, closedAt);
+    return item ? { ...item, sortIndex: index } : null;
+  }
+  if (session.window) {
+    return normalizeClosedSessionWindow(session.window, closedAt, index);
+  }
+  return null;
+}
+
+function normalizeClosedSessionTab(tab, closedAt) {
+  const normalized = normalizeUrl(tab.url);
+  if (!normalized) return null;
+  const title = displayTitle(tab.title, tab.url, normalized.host);
+  return {
+    id: `session:${tab.sessionId}`,
+    sessionId: tab.sessionId,
+    kind: "tab",
+    source: "Chrome",
+    title,
+    safeUrl: normalized.safeUrl,
+    host: normalized.host,
+    hostLabel: labelHost(normalized.host),
+    faviconUrl: tab.favIconUrl || faviconForHost(normalized),
+    overview: fallbackOverview({ ...normalized, title }),
+    closedAt,
+    signature: normalized.canonicalSignature,
+    restorable: Boolean(tab.sessionId)
+  };
+}
+
+function normalizeClosedSessionWindow(windowSession, closedAt, index) {
+  const tabs = Array.isArray(windowSession.tabs)
+    ? windowSession.tabs.map((tab) => normalizeClosedSessionTab(tab, closedAt)).filter(Boolean)
+    : [];
+  if (!tabs.length && !windowSession.sessionId) return null;
+  const firstTab = tabs[0];
+  const count = tabs.length || Number(windowSession.tabs?.length || 0);
+  return {
+    id: `session:${windowSession.sessionId || `window-${index}`}`,
+    sessionId: windowSession.sessionId,
+    kind: "window",
+    source: "Chrome",
+    title: `窗口 · ${count} tabs`,
+    safeUrl: firstTab?.safeUrl || "",
+    host: firstTab?.host || "",
+    hostLabel: firstTab?.hostLabel || "Chrome Window",
+    faviconUrl: firstTab?.faviconUrl || "",
+    overview: {
+      title: `窗口 · ${count} tabs`,
+      heading: "",
+      description: tabs.slice(0, 3).map((tab) => tab.title).join(" / ") || "Recently closed window"
+    },
+    closedAt,
+    signature: `window:${windowSession.sessionId || index}`,
+    restorable: Boolean(windowSession.sessionId)
+  };
+}
+
+function normalizedClosedLog(state) {
+  return state.closedLog
+    .map(normalizeClosedLogItem)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime());
+}
+
+function normalizeClosedLogItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const normalized = normalizeUrl(item.safeUrl);
+  if (!normalized) return null;
+  const closedAt = new Date(item.closedAt || Date.now()).toISOString();
+  const title = displayTitle(item.title, item.safeUrl, normalized.host);
+  return {
+    id: item.id || `${closedAt}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: "tab",
+    source: "Panel",
+    title,
+    safeUrl: normalized.safeUrl,
+    host: normalized.host,
+    hostLabel: item.hostLabel || labelHost(normalized.host),
+    faviconUrl: item.faviconUrl || faviconForHost(normalized),
+    overview: item.overview || fallbackOverview({ ...normalized, title }),
+    closedAt,
+    reason: item.reason || "closed",
+    signature: normalized.canonicalSignature,
+    restorable: true
+  };
+}
+
+function appendClosedLog(state, tabs, reason) {
+  const entries = tabs.map((tab) => closedLogEntry(tab, reason)).filter(Boolean);
+  if (!entries.length) return;
+  state.closedLog = [...entries, ...state.closedLog];
+  pruneClosedState(state);
+}
+
+function closedLogEntry(tab, reason) {
+  const normalized = normalizeUrl(tab.safeUrl || tab.url);
+  if (!normalized) return null;
+  const title = displayTitle(tab.title, normalized.safeUrl, normalized.host);
+  return {
+    id: `${Date.now()}-${tab.tabId || Math.random().toString(36).slice(2, 8)}`,
+    title,
+    safeUrl: normalized.safeUrl,
+    host: normalized.host,
+    hostLabel: tab.hostLabel || labelHost(normalized.host),
+    faviconUrl: tab.faviconUrl || faviconForHost(normalized),
+    overview: tab.overview || fallbackOverview({ ...normalized, title }),
+    closedAt: new Date().toISOString(),
+    reason,
+    source: "Panel"
+  };
+}
+
+function pruneClosedState(state) {
+  const cutoff = Date.now() - CLOSED_LOG_DAYS * DAY_MS;
+  state.closedLog = (state.closedLog || [])
+    .map(normalizeClosedLogItem)
+    .filter((item) => new Date(item.closedAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime())
+    .slice(0, MAX_CLOSED_LOG_ITEMS);
+
+  const dismissed = {};
+  for (const [id, dismissedAt] of Object.entries(state.closedDismissed || {})) {
+    const time = new Date(dismissedAt).getTime();
+    if (!time || time >= cutoff) dismissed[id] = dismissedAt;
+  }
+  state.closedDismissed = dismissed;
 }
 
 function sortSavedDesc(a, b) {

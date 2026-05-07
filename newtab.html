@@ -65,6 +65,15 @@
               <div id="archiveItems" class="archive-list"></div>
             </div>
           </section>
+          <section id="closedPanel" class="closed-panel">
+            <button id="closedToggle" class="closed-toggle is-open" type="button">
+              Recently closed <span id="closedCount"></span>
+            </button>
+            <div id="closedBody" class="closed-body">
+              <div id="closedItems" class="closed-list"></div>
+              <button id="closedMoreButton" class="closed-more" type="button" data-action="toggle-closed-more" hidden></button>
+            </div>
+          </section>
         </aside>
       </section>
     </main>
@@ -126,6 +135,19 @@
       <article class="archive-row">
         <a class="archive-title" target="_blank" rel="noreferrer"></a>
         <span class="archive-date"></span>
+      </article>
+    </template>
+
+    <template id="closedTemplate">
+      <article class="closed-row">
+        <img class="favicon" alt="" />
+        <div class="closed-copy">
+          <a class="closed-title" href="#"></a>
+          <p class="closed-meta"></p>
+        </div>
+        <span class="closed-source"></span>
+        <button class="mini-action" type="button" data-action="restore-closed">恢复</button>
+        <button class="icon-action" type="button" data-action="dismiss-closed" title="移除记录">×</button>
       </article>
     </template>
 

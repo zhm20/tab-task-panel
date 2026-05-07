@@ -3,8 +3,10 @@ import {
   checkSavedItem,
   clearSelection,
   closeTabs,
+  dismissClosedItem,
   dismissSavedItem,
   focusTab,
+  restoreClosedItem,
   saveTabForLaterAndClose,
   setBadgeCount,
   toggleTabSelected
@@ -23,6 +25,11 @@ const archiveBody = document.querySelector("#archiveBody");
 const archiveCount = document.querySelector("#archiveCount");
 const archiveSearch = document.querySelector("#archiveSearch");
 const archiveItems = document.querySelector("#archiveItems");
+const closedCount = document.querySelector("#closedCount");
+const closedToggle = document.querySelector("#closedToggle");
+const closedBody = document.querySelector("#closedBody");
+const closedItems = document.querySelector("#closedItems");
+const closedMoreButton = document.querySelector("#closedMoreButton");
 const refreshButton = document.querySelector("#refreshButton");
 const closeAllButton = document.querySelector("#closeAllButton");
 const closeSelectedButton = document.querySelector("#closeSelectedButton");
@@ -35,9 +42,11 @@ const groupTemplate = document.querySelector("#groupTemplate");
 const tabTemplate = document.querySelector("#tabTemplate");
 const savedTemplate = document.querySelector("#savedTemplate");
 const archiveTemplate = document.querySelector("#archiveTemplate");
+const closedTemplate = document.querySelector("#closedTemplate");
 
 let dashboard = null;
 const expandedGroups = new Set();
+let closedExpanded = false;
 let resizeTimer = 0;
 
 refreshButton.addEventListener("click", () => loadDashboard());
@@ -45,13 +54,13 @@ refreshButton.addEventListener("click", () => loadDashboard());
 closeAllButton.addEventListener("click", async () => {
   if (!dashboard) return;
   const tabs = dashboard.groups.flatMap((group) => group.tabs);
-  await closeTabsWithGuard(tabs, "已关闭全部可关闭标签");
+  await closeTabsWithGuard(tabs, "已关闭全部可关闭标签", "all");
 });
 
 closeSelectedButton.addEventListener("click", async () => {
   if (!dashboard) return;
   const selectedTabs = dashboard.groups.flatMap((group) => group.tabs.filter((tab) => tab.selected));
-  await closeTabsWithGuard(selectedTabs, "已关闭所选标签");
+  await closeTabsWithGuard(selectedTabs, "已关闭所选标签", "selected");
   await clearSelection();
 });
 
@@ -66,6 +75,11 @@ archiveToggle.addEventListener("click", () => {
 });
 
 archiveSearch.addEventListener("input", () => renderArchive(dashboard?.archivedItems || [], archiveSearch.value));
+
+closedToggle.addEventListener("click", () => {
+  closedBody.hidden = !closedBody.hidden;
+  closedToggle.classList.toggle("is-open", !closedBody.hidden);
+});
 
 window.addEventListener("resize", () => {
   window.clearTimeout(resizeTimer);
@@ -103,16 +117,23 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "toggle-closed-more") {
+    closedExpanded = !closedExpanded;
+    renderClosed(dashboard?.closedItems || []);
+    button.disabled = false;
+    return;
+  }
+
   if (action === "close-group") {
     const group = findGroup(button.closest(".domain-card")?.dataset.groupId);
-    await closeTabsWithGuard(group?.tabs || [], "已关闭分组标签");
+    await closeTabsWithGuard(group?.tabs || [], "已关闭分组标签", "group");
   } else if (action === "close-duplicates") {
     const group = findGroup(button.closest(".domain-card")?.dataset.groupId);
     const duplicateTabs = (group?.tabs || []).filter((tab) => group?.duplicateTabIds.includes(tab.tabId));
-    await closeTabsWithGuard(duplicateTabs, "已关闭重复标签");
+    await closeTabsWithGuard(duplicateTabs, "已关闭重复标签", "duplicates");
   } else if (action === "close-tab") {
     const tab = findTab(button.closest(".tab-row")?.dataset.tabId);
-    await closeTabsWithGuard(tab ? [tab] : [], "标签已关闭");
+    await closeTabsWithGuard(tab ? [tab] : [], "标签已关闭", "single");
   } else if (action === "save-tab") {
     const tab = findTab(button.closest(".tab-row")?.dataset.tabId);
     if (tab) {
@@ -129,6 +150,17 @@ document.addEventListener("click", async (event) => {
   } else if (action === "dismiss-saved") {
     await dismissSavedItem(button.closest(".saved-row")?.dataset.savedId || "");
     showToast("已移除保存项");
+    await loadDashboard();
+  } else if (action === "restore-closed") {
+    const item = findClosedItem(button.closest(".closed-row")?.dataset.closedId);
+    if (item) {
+      await restoreClosedItem(item.id);
+      showToast(item.kind === "window" ? "窗口已恢复" : "标签已恢复");
+      await loadDashboard();
+    }
+  } else if (action === "dismiss-closed") {
+    await dismissClosedItem(button.closest(".closed-row")?.dataset.closedId || "");
+    showToast("已隐藏关闭记录");
     await loadDashboard();
   }
 });
@@ -152,10 +184,11 @@ async function loadDashboard() {
 
 function renderDashboard(nextDashboard) {
   if (!nextDashboard) return;
-  const { groups, savedItems: saved, archivedItems, summary } = nextDashboard;
+  const { groups, savedItems: saved, archivedItems, closedItems: closed, summary } = nextDashboard;
   dateLabel.textContent = dateText();
   domainCount.textContent = `${summary.domainCount} groups`;
   savedCount.textContent = `${summary.savedCount} active`;
+  closedCount.textContent = summary.closedCount ? `(${summary.closedCount})` : "";
   closeSelectedButton.disabled = summary.selectedCount === 0;
   closeSelectedButton.textContent = summary.selectedCount ? `关闭所选 ${summary.selectedCount}` : "关闭所选";
   closeAllButton.disabled = summary.openTabCount === 0;
@@ -168,13 +201,15 @@ function renderDashboard(nextDashboard) {
     statCard("Open tabs", summary.openTabCount),
     statCard("Groups", summary.domainCount),
     statCard("Duplicates", summary.duplicateCount),
-    statCard("Saved", summary.savedCount + summary.archivedCount)
+    statCard("Saved", summary.savedCount + summary.archivedCount),
+    statCard("Closed", summary.closedCount)
   );
 
   renderDomainGroups(groups);
 
   renderSaved(saved);
   renderArchive(archivedItems, archiveSearch.value);
+  renderClosed(closed);
 }
 
 function renderDomainGroups(groups) {
@@ -338,17 +373,56 @@ function renderArchive(items, query = "") {
   }
 }
 
-async function closeAndRefresh(tabIds, message) {
+function renderClosed(items) {
+  closedItems.replaceChildren();
+  closedMoreButton.hidden = true;
+
+  if (!items.length) {
+    closedItems.append(emptyState("还没有关闭历史。"));
+    return;
+  }
+
+  const visible = closedExpanded ? items : items.slice(0, 5);
+  for (const item of visible) {
+    const node = closedTemplate.content.firstElementChild.cloneNode(true);
+    node.dataset.closedId = item.id;
+
+    const favicon = node.querySelector(".favicon");
+    favicon.src = item.faviconUrl || "";
+    favicon.hidden = !item.faviconUrl;
+
+    const title = node.querySelector(".closed-title");
+    title.textContent = item.title;
+    title.href = item.safeUrl || "#";
+
+    node.querySelector(".closed-meta").textContent = [
+      item.hostLabel || item.host || "page",
+      relativeTime(item.closedAt),
+      item.kind === "window" ? "window" : item.reason || "closed"
+    ].filter(Boolean).join(" · ");
+
+    node.querySelector(".closed-source").textContent = item.source;
+    node.querySelector('[data-action="restore-closed"]').disabled = !item.restorable;
+    closedItems.append(node);
+  }
+
+  if (items.length > 5) {
+    closedMoreButton.hidden = false;
+    closedMoreButton.textContent = closedExpanded ? "Show fewer" : `Show ${items.length - 5} more`;
+  }
+}
+
+async function closeAndRefresh(tabIds, message, options = {}) {
   if (!tabIds.length) {
     showToast("没有可关闭的标签");
     return;
   }
-  await closeTabs(tabIds);
+  await closeTabs(tabIds, options);
   showToast(`${message} (${tabIds.length})`);
   await loadDashboard();
 }
 
-async function closeTabsWithGuard(tabs, message) {
+async function closeTabsWithGuard(tabs, message, reason = "closed") {
   const candidates = closableTabs(tabs);
   if (candidates.length !== tabs.length) {
     showToast("已跳过 pinned 标签");
@@ -357,7 +431,7 @@ async function closeTabsWithGuard(tabs, message) {
     const ok = window.confirm("所选范围里有正在播放声音的标签，确认关闭吗？");
     if (!ok) return;
   }
-  await closeAndRefresh(candidates.map((tab) => tab.tabId), message);
+  await closeAndRefresh(candidates.map((tab) => tab.tabId), message, { tabs: candidates, reason });
 }
 
 function closableTabs(tabs) {
@@ -407,6 +481,10 @@ function findGroup(groupId) {
 
 function findTab(tabId) {
   return dashboard?.groups.flatMap((group) => group.tabs).find((tab) => String(tab.tabId) === String(tabId));
+}
+
+function findClosedItem(id) {
+  return dashboard?.closedItems.find((item) => item.id === id);
 }
 
 function showToast(message) {
